@@ -1,4 +1,4 @@
-import { generatorHandler } from '@prisma/generator-helper';
+import { EnvValue, generatorHandler } from '@prisma/generator-helper';
 import { transformDMMF } from './generator/transformDMMF';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,18 +13,34 @@ generatorHandler({
     };
   },
   async onGenerate(options) {
-    const payload = transformDMMF(options.dmmf);
-    if (options.generator.output) {
+    const {
+      dmmf,
+      generator: { output, config },
+    } = options;
+    const useSubDirs = config.useSubDirs === 'true';
+
+    const payload = transformDMMF(dmmf, useSubDirs);
+    if (output) {
       const outputDir =
         // This ensures previous version of prisma are still supported
-        typeof options.generator.output === 'string'
-          ? (options.generator.output as unknown as string)
-          : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            parseEnvValue(options.generator.output);
+        typeof output === 'string'
+          ? (output as unknown as string)
+          : parseEnvValue(output as any);
       try {
         await fs.promises.mkdir(outputDir, {
           recursive: true,
         });
+        if (useSubDirs) {
+          const types = payload.map(({ type }) => type);
+          const uniqueTypes = [...new Set(types)];
+          await Promise.all(
+            uniqueTypes.map((type) =>
+              fs.promises.mkdir(path.join(outputDir, type), {
+                recursive: true,
+              }),
+            ),
+          );
+        }
         const barrelFile = path.join(outputDir, 'index.ts');
         await fs.promises.writeFile(barrelFile, '', {
           encoding: 'utf-8',
@@ -34,7 +50,9 @@ generatorHandler({
             const fsPromises = [];
             fsPromises.push(
               fs.promises.writeFile(
-                path.join(outputDir, n.name + '.ts'),
+                useSubDirs
+                  ? path.join(outputDir, n.type, n.name + '.ts')
+                  : path.join(outputDir, n.name + '.ts'),
                 prettier.format(n.rawString, {
                   parser: 'babel-ts',
                 }),
@@ -47,14 +65,18 @@ generatorHandler({
             fsPromises.push(
               fs.promises.appendFile(
                 barrelFile,
-                `export * from './${n.name}';\n`,
+                `export * from './${useSubDirs ? `${n.type}/` : ''}${
+                  n.name
+                }';\n`,
                 { encoding: 'utf-8' },
               ),
             );
             if (n.inputRawString) {
               fsPromises.push(
                 fs.promises.writeFile(
-                  path.join(outputDir, n.name + 'Input.ts'),
+                  useSubDirs
+                    ? path.join(outputDir, n.type, n.name + 'Input.ts')
+                    : path.join(outputDir, n.name + 'Input.ts'),
                   prettier.format(n.inputRawString, {
                     parser: 'babel-ts',
                   }),
@@ -66,7 +88,9 @@ generatorHandler({
               fsPromises.push(
                 fs.promises.appendFile(
                   barrelFile,
-                  `export * from './${n.name}Input';\n`,
+                  `export * from './${useSubDirs ? `${n.type}/` : ''}${
+                    n.name
+                  }Input';\n`,
                   { encoding: 'utf-8' },
                 ),
               );

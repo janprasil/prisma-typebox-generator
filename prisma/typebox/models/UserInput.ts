@@ -1,8 +1,9 @@
 import { Type, Static } from "@sinclair/typebox";
-import { Role } from "./Role";
 
-export const User = Type.Object({
-  id: Type.Number(),
+import { Role } from "../enums/Role";
+
+export const UserInput = Type.Object({
+  id: Type.String(),
   createdAt: Type.Optional(Type.String()),
   email: Type.String(),
   weight: Type.Optional(Type.Number()),
@@ -12,8 +13,8 @@ export const User = Type.Object({
   role: Type.Optional(Role),
   posts: Type.Array(
     Type.Object({
-      id: Type.Number(),
-      userId: Type.Optional(Type.Number()),
+      id: Type.String(),
+      userId: Type.String(),
     })
   ),
   keywords: Type.Array(Type.String()),
@@ -22,4 +23,4 @@ export const User = Type.Object({
   biginteger: Type.Integer(),
 });
 
-export type UserType = Static<typeof User>;
+export type UserInputType = Static<typeof UserInput>;

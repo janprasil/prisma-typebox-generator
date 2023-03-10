@@ -1,11 +1,12 @@
 import { Type, Static } from "@sinclair/typebox";
-import { Role } from "./Role";
 
-export const Post = Type.Object({
-  id: Type.Number(),
+import { Role } from "../enums/Role";
+
+export const PostInput = Type.Object({
+  id: Type.String(),
   user: Type.Optional(
     Type.Object({
-      id: Type.Number(),
+      id: Type.String(),
       createdAt: Type.Optional(Type.String()),
       email: Type.String(),
       weight: Type.Optional(Type.Number()),
@@ -19,7 +20,7 @@ export const Post = Type.Object({
       biginteger: Type.Integer(),
     })
   ),
-  userId: Type.Optional(Type.Number()),
+  userId: Type.String(),
 });
 
-export type PostType = Static<typeof Post>;
+export type PostInputType = Static<typeof PostInput>;

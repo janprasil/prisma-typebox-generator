@@ -67,16 +67,20 @@ const transformFields = (fields: DMMF.Field[]) => {
 
 const transformModel = (model: DMMF.Model, models?: DMMF.Model[]) => {
   const fields = transformFields(model.fields);
+  let inputRaw = '';
   let raw = [
     `${models ? '' : `export const ${model.name} = `}Type.Object({\n\t`,
     fields.rawString,
     '})',
   ].join('\n');
-  let inputRaw = [
-    `${models ? '' : `export const ${model.name}Input = `}Type.Object({\n\t`,
-    fields.rawInputString,
-    '})',
-  ].join('\n');
+
+  if (!model.name.endsWith('View')) {
+    inputRaw = [
+      `${models ? '' : `export const ${model.name}Input = `}Type.Object({\n\t`,
+      fields.rawInputString,
+      '})',
+    ].join('\n');
+  }
 
   if (Array.isArray(models)) {
     models.forEach((md) => {
@@ -108,8 +112,8 @@ export const transformEnum = (enm: DMMF.DatamodelEnum) => {
   ].join('\n');
 };
 
-export function transformDMMF(dmmf: DMMF.Document) {
-  const { models, enums } = dmmf.datamodel;
+export function transformDMMF(dmmf: DMMF.Document, useSubDirs: boolean) {
+  const { models, enums, types } = dmmf.datamodel;
   const importStatements = new Set([
     'import {Type, Static} from "@sinclair/typebox"',
   ]);
@@ -117,6 +121,8 @@ export function transformDMMF(dmmf: DMMF.Document) {
   return [
     ...models.map((model) => {
       let { raw, inputRaw, deps } = transformModel(model);
+      const modelImportStatementSet = new Set<String>();
+      const isView = model.name.endsWith('View');
 
       [...deps].forEach((d) => {
         const depsModel = models.find((m) => m.name === d) as DMMF.Model;
@@ -133,31 +139,64 @@ export function transformDMMF(dmmf: DMMF.Document) {
         if (raw.match(re)) {
           raw = raw.replace(re, enm.name);
           inputRaw = inputRaw.replace(re, enm.name);
-          importStatements.add(`import { ${enm.name} } from './${enm.name}'`);
+          modelImportStatementSet.add(
+            `import { ${enm.name} } from '${useSubDirs ? '../enums/' : './'}${
+              enm.name
+            }'`,
+          );
+        }
+      });
+
+      types.forEach((type) => {
+        const re = new RegExp(`::${type.name}::`, 'gm');
+        if (raw.match(re)) {
+          raw = raw.replace(re, type.name);
+          inputRaw = inputRaw.replace(re, type.name);
+          modelImportStatementSet.add(
+            `import { ${type.name} } from '${useSubDirs ? '../types/' : './'}${
+              type.name
+            }'`,
+          );
         }
       });
 
       return {
         name: model.name,
+        type: isView ? 'views' : 'models',
         rawString: [
           [...importStatements].join('\n'),
+          [...modelImportStatementSet].join('\n'),
           raw,
           `export type ${model.name}Type = Static<typeof ${model.name}>`,
         ].join('\n\n'),
-        inputRawString: [
-          [...importStatements].join('\n'),
-          inputRaw,
-          `export type ${model.name}InputType = Static<typeof ${model.name}Input>`,
-        ].join('\n\n'),
+        inputRawString: isView
+          ? ''
+          : [
+              [...importStatements].join('\n'),
+              [...modelImportStatementSet].join('\n'),
+              inputRaw,
+              `export type ${model.name}InputType = Static<typeof ${model.name}Input>`,
+            ].join('\n\n'),
       };
     }),
     ...enums.map((enm) => {
       return {
         name: enm.name,
+        type: 'enums',
         inputRawString: null,
         rawString:
           'import {Type, Static} from "@sinclair/typebox"\n\n' +
           transformEnum(enm),
+      };
+    }),
+    ...types.map((type) => {
+      return {
+        name: type.name,
+        type: 'types',
+        inputRawString: null,
+        rawString:
+          'import {Type} from "@sinclair/typebox"\n\n' +
+          transformModel(type).raw,
       };
     }),
   ];
