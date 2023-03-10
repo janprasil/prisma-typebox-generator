@@ -43,10 +43,12 @@ enum Role {
 type PostType {
   title String
   text String
+  role Role
 }
 
 view UserView {
   id               String                             @id @default(auto()) @map("_id") @db.ObjectId
   fullName String
   posts PostType[]
+  role Role
 }

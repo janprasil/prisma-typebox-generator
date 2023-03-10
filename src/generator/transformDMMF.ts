@@ -65,8 +65,14 @@ const transformFields = (fields: DMMF.Field[]) => {
   };
 };
 
-const transformModel = (model: DMMF.Model, models?: DMMF.Model[]) => {
+const transformModel = (
+  model: DMMF.Model,
+  models?: DMMF.Model[],
+  isType = false,
+) => {
   const fields = transformFields(model.fields);
+  const isView = model.name.endsWith('View');
+  const generateInput = !isView || !isType;
   let inputRaw = '';
   let raw = [
     `${models ? '' : `export const ${model.name} = `}Type.Object({\n\t`,
@@ -74,7 +80,7 @@ const transformModel = (model: DMMF.Model, models?: DMMF.Model[]) => {
     '})',
   ].join('\n');
 
-  if (!model.name.endsWith('View')) {
+  if (generateInput) {
     inputRaw = [
       `${models ? '' : `export const ${model.name}Input = `}Type.Object({\n\t`,
       fields.rawInputString,
@@ -85,9 +91,11 @@ const transformModel = (model: DMMF.Model, models?: DMMF.Model[]) => {
   if (Array.isArray(models)) {
     models.forEach((md) => {
       const re = new RegExp(`.+::${md.name}.+\n`, 'gm');
-      const inputRe = new RegExp(`.+::${md.name}.+\n`, 'gm');
       raw = raw.replace(re, '');
-      inputRaw = inputRaw.replace(inputRe, '');
+      if (generateInput) {
+        const inputRe = new RegExp(`.+::${md.name}.+\n`, 'gm');
+        inputRaw = inputRaw.replace(inputRe, '');
+      }
     });
   }
 
@@ -118,9 +126,10 @@ export function transformDMMF(dmmf: DMMF.Document, useSubDirs: boolean) {
     'import {Type, Static} from "@sinclair/typebox"',
   ]);
 
-  return [
-    ...models.map((model) => {
-      let { raw, inputRaw, deps } = transformModel(model);
+  const generateModel =
+    (isType = false) =>
+    (model: DMMF.Model) => {
+      let { raw, inputRaw, deps } = transformModel(model, undefined, true);
       const modelImportStatementSet = new Set<String>();
       const isView = model.name.endsWith('View');
 
@@ -138,7 +147,9 @@ export function transformDMMF(dmmf: DMMF.Document, useSubDirs: boolean) {
         const re = new RegExp(`::${enm.name}::`, 'gm');
         if (raw.match(re)) {
           raw = raw.replace(re, enm.name);
-          inputRaw = inputRaw.replace(re, enm.name);
+          if (!isView) {
+            inputRaw = inputRaw.replace(re, enm.name);
+          }
           modelImportStatementSet.add(
             `import { ${enm.name} } from '${useSubDirs ? '../enums/' : './'}${
               enm.name
@@ -151,34 +162,41 @@ export function transformDMMF(dmmf: DMMF.Document, useSubDirs: boolean) {
         const re = new RegExp(`::${type.name}::`, 'gm');
         if (raw.match(re)) {
           raw = raw.replace(re, type.name);
-          inputRaw = inputRaw.replace(re, type.name);
+          if (!isView) {
+            inputRaw = inputRaw.replace(re, type.name);
+          }
           modelImportStatementSet.add(
-            `import { ${type.name} } from '${useSubDirs ? '../types/' : './'}${
-              type.name
-            }'`,
+            `import { ${type.name} } from '${
+              useSubDirs && !isType ? '../types/' : './'
+            }${type.name}'`,
           );
         }
       });
 
       return {
         name: model.name,
-        type: isView ? 'views' : 'models',
+        type: isType ? 'types' : isView ? 'views' : 'models',
         rawString: [
           [...importStatements].join('\n'),
           [...modelImportStatementSet].join('\n'),
           raw,
           `export type ${model.name}Type = Static<typeof ${model.name}>`,
         ].join('\n\n'),
-        inputRawString: isView
-          ? ''
-          : [
-              [...importStatements].join('\n'),
-              [...modelImportStatementSet].join('\n'),
-              inputRaw,
-              `export type ${model.name}InputType = Static<typeof ${model.name}Input>`,
-            ].join('\n\n'),
+        inputRawString:
+          isView || isType
+            ? ''
+            : [
+                [...importStatements].join('\n'),
+                [...modelImportStatementSet].join('\n'),
+                inputRaw,
+                `export type ${model.name}InputType = Static<typeof ${model.name}Input>`,
+              ].join('\n\n'),
       };
-    }),
+    };
+
+  return [
+    ...models.map(generateModel()),
+    ...types.map(generateModel(true)),
     ...enums.map((enm) => {
       return {
         name: enm.name,
@@ -187,16 +205,6 @@ export function transformDMMF(dmmf: DMMF.Document, useSubDirs: boolean) {
         rawString:
           'import {Type, Static} from "@sinclair/typebox"\n\n' +
           transformEnum(enm),
-      };
-    }),
-    ...types.map((type) => {
-      return {
-        name: type.name,
-        type: 'types',
-        inputRawString: null,
-        rawString:
-          'import {Type} from "@sinclair/typebox"\n\n' +
-          transformModel(type).raw,
       };
     }),
   ];

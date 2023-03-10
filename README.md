@@ -32,12 +32,13 @@ generator typebox {
 }
 ```
 
-With a custom output path (default=./typebox)
+With a custom output path (default=./typebox) or useSubDirs (default="false")
 
 ```prisma
 generator typebox {
   provider = "prisma-typebox-generator"
   output = "custom-output-path"
+  useSubDirs = "true"
 }
 ```
 
