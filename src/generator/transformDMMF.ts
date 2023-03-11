@@ -9,7 +9,9 @@ const transformField = (field: DMMF.Field) => {
     tokens.push('Type.Number()');
   } else if (['BigInt'].includes(field.type)) {
     tokens.push('Type.Integer()');
-  } else if (['String', 'DateTime', 'Json', 'Date'].includes(field.type)) {
+  } else if (['DateTime', 'Date'].includes(field.type)) {
+    tokens.push('Type.Date()');
+  } else if (['String', 'Json'].includes(field.type)) {
     tokens.push('Type.String()');
   } else if (field.type === 'Boolean') {
     tokens.push('Type.Boolean()');

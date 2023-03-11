@@ -1,3 +1,9 @@
+## [2.1.2]
+
+### Features
+
+- add support for `DateTime` and `Date` types which evaluates as `Type.Date()` in Typebox
+
 ## [2.1.0]
 
 ### Features
