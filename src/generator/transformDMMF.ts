@@ -10,7 +10,7 @@ const transformField = (field: DMMF.Field) => {
   } else if (['BigInt'].includes(field.type)) {
     tokens.push('Type.Integer()');
   } else if (['DateTime', 'Date'].includes(field.type)) {
-    tokens.push('Type.Date()');
+    tokens.push("Type.Unsafe<Date>({ type: 'string', format: 'date' })");
   } else if (['String', 'Json'].includes(field.type)) {
     tokens.push('Type.String()');
   } else if (field.type === 'Boolean') {
@@ -29,14 +29,14 @@ const transformField = (field: DMMF.Field) => {
 
   // @id cannot be optional except for input if it's auto increment
   if (field.isId && (field?.default as any)?.name === 'autoincrement') {
-    inputTokens.splice(1, 0, 'Type.Optional(');
+    inputTokens.splice(1, 0, 'Nullable(');
     inputTokens.splice(inputTokens.length, 0, ')');
   }
 
   if ((!field.isRequired || field.hasDefaultValue) && !field.isId) {
-    tokens.splice(1, 0, 'Type.Optional(');
+    tokens.splice(1, 0, 'Nullable(');
     tokens.splice(tokens.length, 0, ')');
-    inputTokens.splice(1, 0, 'Type.Optional(');
+    inputTokens.splice(1, 0, 'Nullable(');
     inputTokens.splice(inputTokens.length, 0, ')');
   }
 
@@ -181,6 +181,7 @@ export function transformDMMF(dmmf: DMMF.Document, useSubDirs: boolean) {
         rawString: [
           [...importStatements].join('\n'),
           [...modelImportStatementSet].join('\n'),
+          'const Nullable = <T extends TSchema>(type: T) => Type.Optional(Type.Union([type, Type.Null()]))',
           raw,
           `export type ${model.name}Type = Static<typeof ${model.name}>`,
         ].join('\n\n'),
